@@ -14,6 +14,11 @@ Bookery is a **learning project**: the user is relearning Go (day job is PHP) by
 - The user's editor may not autosave. Before running tests on their code, `cat` the file to confirm what's on disk.
 - Design each milestone so it exercises one of the focus areas, instead of treating them as side topics.
 
+## Git
+
+- Do **not** add a `Co-Authored-By: Claude` trailer (or any Claude attribution) to commit messages or PR descriptions. The user doesn't want Claude listed as a contributor.
+- `main` is protected: never commit or push to it directly, and never force-push it. Work on a branch, push the branch, and open a PR. The CI `test` job (gofmt, vet, `go test -race`, in `.github/workflows/ci.yml`) must pass before merging.
+
 ## Commands
 
 ```bash
@@ -44,6 +49,7 @@ Hexagonal (ports and adapters) inside one bounded context, `internal/booking/`:
 - **ID pattern:** `NewXID()` takes no arguments and generates a UUID (`github.com/google/uuid`). `XIDFromString(s)` reconstructs an existing ID and validates it. Each ID is its own type so the compiler catches mixed-up arguments. The three ID types are intentionally *not* merged with generics.
 - **Aggregates** change state only through business methods (`Confirm()`, `Cancel(now)`), never setters. They use pointer receivers and return `*Booking` from their constructor. A failed operation must leave the state unchanged.
 - **Time:** domain methods take `now time.Time` as a parameter and never call `time.Now()`. A `Clock` interface belongs in the application layer.
+- **Start-time boundary (deliberate business decision, the asymmetry is intended):** booking is allowed when `now` equals the slot start (walk-ins), but cancelling is *not* allowed from the slot start onward. Don't unify these two checks.
 - **Errors** are package-level sentinel values (`var ErrX = errors.New(...)`), compared with `errors.Is` once wrapping is in use.
 - **Tests** live in the external `domain_test` package (black-box tests), are table-driven where it fits, and share helpers such as `mustTime` in `timeslot_test.go`.
 
