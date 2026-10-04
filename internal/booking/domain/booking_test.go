@@ -1,4 +1,4 @@
-git config user.email "you@example.com"package domain_test
+package domain_test
 
 import (
 	"errors"
