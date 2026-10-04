@@ -6,6 +6,9 @@ import (
 )
 
 var ErrSlotInPast = errors.New("cannot book a slot that has already started")
+var ErrCannotConfirm = errors.New("only pending bookings can be confirmed")
+var ErrCannotCancel = errors.New("only active bookings can be cancelled")
+var ErrAlreadyStarted = errors.New("can not cancel a booking that has already started")
 
 type Status string
 
@@ -55,4 +58,26 @@ func (b *Booking) CustomerID() CustomerID {
 
 func (b *Booking) Slot() TimeSlot {
 	return b.slot
+}
+
+func (b *Booking) Confirm() error {
+	if b.status != StatusPending {
+		return ErrCannotConfirm
+	}
+
+	b.status = StatusConfirmed
+	return nil
+}
+
+func (b *Booking) Cancel(now time.Time) error {
+	if b.status != StatusPending && b.status != StatusConfirmed {
+		return ErrCannotCancel
+	}
+
+	if !now.Before(b.slot.Start()) {
+		return ErrAlreadyStarted
+	}
+
+	b.status = StatusCancelled
+	return nil
 }
