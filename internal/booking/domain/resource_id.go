@@ -3,7 +3,7 @@ package domain
 import (
 	"errors"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var ErrEmptyResourceID = errors.New("resource Id can not be empty")
@@ -13,7 +13,7 @@ type ResourceID struct {
 }
 
 func NewResourceID() ResourceID {
-	return ResourceID{value: uuid.NewString()}
+	return ResourceID{value: uuid.New().String()}
 }
 
 func ResourceIDFromString(value string) (ResourceID, error) {

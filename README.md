@@ -43,7 +43,7 @@ The domain layer is plain Go with no database, HTTP or framework dependencies, s
 
 ## Getting started
 
-Requires Go 1.23 or newer.
+Requires Go 1.27 or newer (it uses the standard library `uuid` package). There are no external dependencies.
 
 ```bash
 go test ./...                 # run all tests
