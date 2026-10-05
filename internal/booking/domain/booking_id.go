@@ -3,7 +3,7 @@ package domain
 import (
 	"errors"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var ErrEmptyBookingID = errors.New("booking Id can not be empty")
@@ -13,7 +13,7 @@ type BookingID struct {
 }
 
 func NewBookingID() BookingID {
-	return BookingID{value: uuid.NewString()}
+	return BookingID{value: uuid.New().String()}
 }
 
 func BookingIDFromString(s string) (BookingID, error) {
