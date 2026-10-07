@@ -55,8 +55,8 @@ gofmt -l . && go vet ./...    # formatting and static checks
 ## Roadmap
 
 - [x] Value objects: `TimeSlot` and typed IDs (`BookingID`, `ResourceID`, `CustomerID`)
-- [ ] `Booking` aggregate with its lifecycle and rules *(in progress)*
-- [ ] Cancellation policies as interchangeable strategies
+- [x] `Booking` aggregate with its lifecycle and rules 
+- [ ] Cancellation policies as interchangeable strategies *(in progress)*
 - [ ] Repository interface with an in-memory implementation
 - [ ] Use cases: create and cancel a booking
 - [ ] Prevent double booking under concurrent requests
