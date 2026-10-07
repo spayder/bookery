@@ -187,14 +187,15 @@ func TestCancel_RelativeToSlotStart(t *testing.T) {
 	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
 
 	cases := []struct {
-		name    string
-		now     time.Time
-		wantErr error
+		name       string
+		now        time.Time
+		wantErr    error
+		wantStatus domain.Status
 	}{
-		{"1 hour before start", slot.Start().Add(-time.Hour), nil},
-		{"exactly at start (too late to cancel)", slot.Start(), domain.ErrAlreadyStarted},
-		{"1 minute after start", slot.Start().Add(time.Minute), domain.ErrAlreadyStarted},
-		{"1 hour after slot ended", slot.End().Add(time.Hour), domain.ErrAlreadyStarted},
+		{"1 hour before start", slot.Start().Add(-time.Hour), nil, domain.StatusCancelled},
+		{"exactly at start (too late to cancel)", slot.Start(), domain.ErrAlreadyStarted, domain.StatusConfirmed},
+		{"1 minute after start", slot.Start().Add(time.Minute), domain.ErrAlreadyStarted, domain.StatusConfirmed},
+		{"1 hour after slot ended", slot.End().Add(time.Hour), domain.ErrAlreadyStarted, domain.StatusConfirmed},
 	}
 
 	for _, c := range cases {
@@ -204,9 +205,26 @@ func TestCancel_RelativeToSlotStart(t *testing.T) {
 			if !errors.Is(err, c.wantErr) {
 				t.Fatalf("error = %v, want %v", err, c.wantErr)
 			}
-			if booking.Status() != domain.StatusCancelled && err == nil {
-				t.Errorf("expected booking status to be cancelled, got %q", booking.Status())
+			if booking.Status() != c.wantStatus {
+				t.Errorf("expected status %q, got %q", c.wantStatus, booking.Status())
 			}
 		})
+	}
+}
+
+func TestConfirm_CancelledBookingFails(t *testing.T) {
+	booking := createPendingBooking(t)
+	now := mustTime(t, "2026-01-01T09:00:00Z")
+	err := booking.Cancel(now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = booking.Confirm()
+	if !errors.Is(err, domain.ErrCannotConfirm) {
+		t.Fatalf("expected error %v, got %v", domain.ErrCannotConfirm, err)
+	}
+	if booking.Status() != domain.StatusCancelled {
+		t.Errorf("expected booking status to be cancelled, got %q", booking.Status())
 	}
 }
