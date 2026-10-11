@@ -17,11 +17,21 @@ func mustSlot(t *testing.T, start, end string) domain.TimeSlot {
 	return slot
 }
 
+func mustNoticePolicy(t *testing.T, notice time.Duration) domain.CancellationPolicy {
+	t.Helper()
+	policy, err := domain.NewNoticePeriodPolicy(notice)
+	if err != nil {
+		t.Fatalf("unexpected error creating policy: %v", err)
+	}
+	return policy
+}
+
 func createPendingBooking(t *testing.T) *domain.Booking {
 	t.Helper()
 	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
 	now := mustTime(t, "2026-01-01T09:00:00Z")
-	booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, now)
+	policy := mustNoticePolicy(t, 0)
+	booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -44,8 +54,8 @@ func TestNewBooking_StartsPendingWithGivenDetails(t *testing.T) {
 	customerID := domain.NewCustomerID()
 	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
 	now := mustTime(t, "2026-01-01T09:00:00Z")
-
-	booking, err := domain.NewBooking(resourceID, customerID, slot, now)
+	policy := mustNoticePolicy(t, 0)
+	booking, err := domain.NewBooking(resourceID, customerID, slot, policy, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,12 +81,13 @@ func TestNewBooking_StartsPendingWithGivenDetails(t *testing.T) {
 func TestNewBooking_GeneratesUniqueIDs(t *testing.T) {
 	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
 	now := mustTime(t, "2026-01-01T09:00:00Z")
+	policy := mustNoticePolicy(t, 0)
 
-	a, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, now)
+	a, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	b, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, now)
+	b, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,6 +99,7 @@ func TestNewBooking_GeneratesUniqueIDs(t *testing.T) {
 
 func TestNewBooking_StartTimeRelativeToNow(t *testing.T) {
 	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
+	policy := mustNoticePolicy(t, 0)
 
 	cases := []struct {
 		name    string
@@ -102,7 +114,7 @@ func TestNewBooking_StartTimeRelativeToNow(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, c.now)
+			booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, c.now)
 			if !errors.Is(err, c.wantErr) {
 				t.Fatalf("error = %v, want %v", err, c.wantErr)
 			}
@@ -193,9 +205,9 @@ func TestCancel_RelativeToSlotStart(t *testing.T) {
 		wantStatus domain.Status
 	}{
 		{"1 hour before start", slot.Start().Add(-time.Hour), nil, domain.StatusCancelled},
-		{"exactly at start (too late to cancel)", slot.Start(), domain.ErrAlreadyStarted, domain.StatusConfirmed},
-		{"1 minute after start", slot.Start().Add(time.Minute), domain.ErrAlreadyStarted, domain.StatusConfirmed},
-		{"1 hour after slot ended", slot.End().Add(time.Hour), domain.ErrAlreadyStarted, domain.StatusConfirmed},
+		{"exactly at start (too late to cancel)", slot.Start(), domain.ErrTooLateToCancel, domain.StatusConfirmed},
+		{"1 minute after start", slot.Start().Add(time.Minute), domain.ErrTooLateToCancel, domain.StatusConfirmed},
+		{"1 hour after slot ended", slot.End().Add(time.Hour), domain.ErrTooLateToCancel, domain.StatusConfirmed},
 	}
 
 	for _, c := range cases {
@@ -226,5 +238,46 @@ func TestConfirm_CancelledBookingFails(t *testing.T) {
 	}
 	if booking.Status() != domain.StatusCancelled {
 		t.Errorf("expected booking status to be cancelled, got %q", booking.Status())
+	}
+}
+
+func TestNewBooking_RejectsMissingPolicy(t *testing.T) {
+	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
+	now := mustTime(t, "2026-01-01T09:00:00Z")
+	_, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, nil, now)
+	if !errors.Is(err, domain.ErrMissingCancellationPolicy) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCancel_PolicyAffectsCancellation(t *testing.T) {
+	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
+	policy := mustNoticePolicy(t, 24*time.Hour)
+
+	cases := []struct {
+		name       string
+		now        time.Time
+		wantStatus domain.Status
+		wantErr    error
+	}{
+		{"25 hours before start", slot.Start().Add(-25 * time.Hour), domain.StatusCancelled, nil},
+		{"23 hours before start", slot.Start().Add(-23 * time.Hour), domain.StatusPending, domain.ErrTooLateToCancel},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bookedAt := slot.Start().Add(-48 * time.Hour)
+			booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, bookedAt)
+			if err != nil {
+				t.Fatalf("unexpected error creating booking: %v", err)
+			}
+			err = booking.Cancel(c.now)
+			if !errors.Is(err, c.wantErr) {
+				t.Fatalf("error = %v, want %v", err, c.wantErr)
+			}
+			if booking.Status() != c.wantStatus {
+				t.Errorf("expected status %q, got %q", c.wantStatus, booking.Status())
+			}
+		})
 	}
 }

@@ -8,7 +8,7 @@ import (
 var ErrSlotInPast = errors.New("cannot book a slot that has already started")
 var ErrCannotConfirm = errors.New("only pending bookings can be confirmed")
 var ErrCannotCancel = errors.New("only active bookings can be cancelled")
-var ErrAlreadyStarted = errors.New("can not cancel a booking that has already started")
+var ErrMissingCancellationPolicy = errors.New("missing cancellation policy")
 
 type Status string
 
@@ -23,12 +23,16 @@ type Booking struct {
 	resourceID ResourceID
 	customerID CustomerID
 	slot       TimeSlot
+	policy     CancellationPolicy
 	status     Status
 }
 
-func NewBooking(resourceID ResourceID, customerID CustomerID, slot TimeSlot, now time.Time) (*Booking, error) {
+func NewBooking(resourceID ResourceID, customerID CustomerID, slot TimeSlot, policy CancellationPolicy, now time.Time) (*Booking, error) {
 	if slot.Start().Before(now) {
 		return nil, ErrSlotInPast
+	}
+	if policy == nil {
+		return nil, ErrMissingCancellationPolicy
 	}
 
 	return &Booking{
@@ -36,6 +40,7 @@ func NewBooking(resourceID ResourceID, customerID CustomerID, slot TimeSlot, now
 		resourceID: resourceID,
 		customerID: customerID,
 		slot:       slot,
+		policy:     policy,
 		status:     StatusPending,
 	}, nil
 }
@@ -74,8 +79,8 @@ func (b *Booking) Cancel(now time.Time) error {
 		return ErrCannotCancel
 	}
 
-	if !now.Before(b.slot.Start()) {
-		return ErrAlreadyStarted
+	if err := b.policy.CheckCancellation(b.slot, now); err != nil {
+		return err
 	}
 
 	b.status = StatusCancelled
