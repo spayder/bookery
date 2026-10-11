@@ -7,6 +7,7 @@ import (
 
 var ErrNegativeNotice = errors.New("negative notice period is not allowed")
 var ErrTooLateToCancel = errors.New("too late to cancel")
+var ErrNotCancellable = errors.New("booking is non-cancellable")
 
 type CancellationPolicy interface {
 	CheckCancellation(slot TimeSlot, now time.Time) error
@@ -29,4 +30,10 @@ func (p NoticePeriodPolicy) CheckCancellation(slot TimeSlot, now time.Time) erro
 		return ErrTooLateToCancel
 	}
 	return nil
+}
+
+type NonCancellablePolicy struct{}
+
+func (NonCancellablePolicy) CheckCancellation(_ TimeSlot, _ time.Time) error {
+	return ErrNotCancellable
 }

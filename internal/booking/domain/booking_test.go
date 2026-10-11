@@ -281,3 +281,20 @@ func TestCancel_PolicyAffectsCancellation(t *testing.T) {
 		})
 	}
 }
+
+func TestCancel_NonCancellablePolicy(t *testing.T) {
+	policy := domain.NonCancellablePolicy{}
+	now := mustTime(t, "2026-01-01T09:00:00Z")
+	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
+	booking, err := domain.NewBooking(domain.NewResourceID(), domain.NewCustomerID(), slot, policy, now)
+	if err != nil {
+		t.Fatalf("unexpected error creating booking: %v", err)
+	}
+	err = booking.Cancel(now)
+	if !errors.Is(err, domain.ErrNotCancellable) {
+		t.Errorf("error = %v, want %v", err, domain.ErrNotCancellable)
+	}
+	if booking.Status() != domain.StatusPending {
+		t.Errorf("expected status %q, got %q", domain.StatusPending, booking.Status())
+	}
+}

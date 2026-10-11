@@ -9,6 +9,7 @@ import (
 )
 
 var _ domain.CancellationPolicy = domain.NoticePeriodPolicy{}
+var _ domain.CancellationPolicy = domain.NonCancellablePolicy{}
 
 func TestNewNoticePeriodPolicy_RejectsNegativeNotice(t *testing.T) {
 	_, err := domain.NewNoticePeriodPolicy(-time.Minute)
@@ -45,6 +46,30 @@ func TestNoticePeriodPolicy_CheckCancellation(t *testing.T) {
 			}
 
 			err = policy.CheckCancellation(slot, c.now)
+			if !errors.Is(err, c.wantErr) {
+				t.Errorf("error = %v, want %v", err, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestNonCancellablePolicy_CheckCancellation(t *testing.T) {
+	policy := domain.NonCancellablePolicy{}
+	slot := mustSlot(t, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")
+
+	cases := []struct {
+		name    string
+		now     time.Time
+		wantErr error
+	}{
+		{"30 days before the start", slot.Start().Add(-30 * 24 * time.Hour), domain.ErrNotCancellable},
+		{"1 hour before the start", slot.Start().Add(-time.Hour), domain.ErrNotCancellable},
+		{"after the start", slot.Start().Add(time.Hour), domain.ErrNotCancellable},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := policy.CheckCancellation(slot, c.now)
 			if !errors.Is(err, c.wantErr) {
 				t.Errorf("error = %v, want %v", err, c.wantErr)
 			}

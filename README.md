@@ -22,7 +22,9 @@ Business rules enforced so far:
 - A booking can't be made for a slot that has already started. Walk-ins are allowed: a slot that starts exactly now can be booked.
 - Only a pending booking can be confirmed.
 - Only an active (pending or confirmed) booking can be cancelled.
-- A booking can't be cancelled once its slot's start time has arrived.
+- Whether a booking can still be cancelled depends on its **cancellation policy**, which is fixed when the booking is made, so later rule changes don't affect existing bookings:
+  - **Notice period:** cancellation is allowed until a set time before the start, e.g. until the start itself for desks, or 24 hours before for meeting rooms.
+  - **Non-cancellable:** the booking can't be cancelled at all, e.g. event spaces.
 - A failed operation never changes a booking's state.
 
 "Resource" is deliberately generic, because the space rents several kinds of things, not only rooms.
@@ -56,8 +58,8 @@ gofmt -l . && go vet ./...    # formatting and static checks
 
 - [x] Value objects: `TimeSlot` and typed IDs (`BookingID`, `ResourceID`, `CustomerID`)
 - [x] `Booking` aggregate with its lifecycle and rules 
-- [ ] Cancellation policies as interchangeable strategies *(in progress)*
-- [ ] Repository interface with an in-memory implementation
+- [x] Cancellation policies as interchangeable strategies 
+- [ ] Repository interface with an in-memory implementation *(in progress)*
 - [ ] Use cases: create and cancel a booking
 - [ ] Prevent double booking under concurrent requests
 - [ ] Runnable demo
