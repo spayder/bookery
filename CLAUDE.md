@@ -49,7 +49,11 @@ Hexagonal (ports and adapters) inside one bounded context, `internal/booking/`:
 - **ID pattern:** `NewXID()` takes no arguments and generates a UUID with the standard library `uuid` package (Go 1.27+; the project deliberately has no external dependencies, so don't add `github.com/google/uuid` back). `XIDFromString(s)` reconstructs an existing ID and validates it. Each ID is its own type so the compiler catches mixed-up arguments. The three ID types are intentionally *not* merged with generics.
 - **Aggregates** change state only through business methods (`Confirm()`, `Cancel(now)`), never setters. They use pointer receivers and return `*Booking` from their constructor. A failed operation must leave the state unchanged.
 - **Time:** domain methods take `now time.Time` as a parameter and never call `time.Now()`. A `Clock` interface belongs in the application layer.
-- **Start-time boundary (deliberate business decision, the asymmetry is intended):** booking is allowed when `now` equals the slot start (walk-ins), but cancelling is *not* allowed from the slot start onward. Don't unify these two checks.
+- **Cancellation policies (strategy pattern):** `Cancel` contains no time rule of its own; it delegates to the booking's `CancellationPolicy` (one-method interface in `cancellation_policy.go`). The policy is passed to `NewBooking` and **fixed at booking time** (deliberate: cancellation terms are agreed when booking, and later rule changes must not affect existing bookings). `NewBooking` rejects a nil policy. New rules are added as new policy types, without editing `booking.go` (open/closed principle).
+  - Implementations are value types with value receivers, each with a compile-time check in the tests (`var _ domain.CancellationPolicy = ...`).
+  - `NoticePeriodPolicy` (built with `NewNoticePeriodPolicy`, rejects a negative notice): cancelling is allowed only while `now` is before `start − notice`; the deadline itself is already too late (`ErrTooLateToCancel`). A notice of 0 is the desk rule.
+  - `NonCancellablePolicy{}` (zero value, no constructor): never cancellable (`ErrNotCancellable`), e.g. event spaces.
+- **Start-time boundary (deliberate business decision, the asymmetry is intended):** booking is allowed when `now` equals the slot start (walk-ins), but with the 0-notice policy, cancelling is *not* allowed from the slot start onward. Don't unify these two checks. `NewBooking` deliberately ignores the cancellation policy: booking inside the notice period is allowed, it just can't be cancelled.
 - **Errors** are package-level sentinel values (`var ErrX = errors.New(...)`), compared with `errors.Is` once wrapping is in use.
 - **Tests** live in the external `domain_test` package (black-box tests), are table-driven where it fits, and share helpers such as `mustTime` in `timeslot_test.go`.
 
@@ -58,8 +62,8 @@ Hexagonal (ports and adapters) inside one bounded context, `internal/booking/`:
 Check the code for the current position. Each milestone lists its main practice area.
 
 1. Value objects: `TimeSlot` and the ID types *(done)*
-2. `Booking` aggregate: Pending → Confirmed → Cancelled lifecycle, and "no booking or cancelling once the slot has started"
-3. `CancellationPolicy` strategies (open/closed principle)
+2. `Booking` aggregate: Pending → Confirmed → Cancelled lifecycle, and "no booking or cancelling once the slot has started" *(done)*
+3. `CancellationPolicy` strategies (open/closed principle) *(done)*
 4. Repository interface + in-memory implementation (interface segregation, dependency inversion)
 5. `CreateBooking` / `CancelBooking` use cases, `Clock` interface, error wrapping
 6. Reproduce and then fix the double-booking race condition (goroutines, mutex, `-race`, WaitGroup)
