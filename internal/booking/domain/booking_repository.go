@@ -15,7 +15,12 @@ type BookingSaver interface {
 	Save(ctx context.Context, booking *Booking) error
 }
 
+type OverlappingBookingFinder interface {
+	FindOverlapping(ctx context.Context, resourceID ResourceID, slot TimeSlot) ([]*Booking, error)
+}
+
 type BookingRepository interface {
 	BookingFinder
 	BookingSaver
+	OverlappingBookingFinder
 }
