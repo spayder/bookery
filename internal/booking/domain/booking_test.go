@@ -298,3 +298,26 @@ func TestCancel_NonCancellablePolicy(t *testing.T) {
 		t.Errorf("expected status %q, got %q", domain.StatusPending, booking.Status())
 	}
 }
+
+func TestIsActive_BookingStatuses(t *testing.T) {
+	booking := createPendingBooking(t)
+	if !booking.IsActive() {
+		t.Errorf("expected booking to be active, got %v", booking.Status())
+	}
+
+	err := booking.Confirm()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !booking.IsActive() {
+		t.Errorf("expected booking to be active, got %v", booking.Status())
+	}
+
+	err = booking.Cancel(mustTime(t, "2026-01-01T09:00:00Z"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if booking.IsActive() {
+		t.Errorf("expected booking to be inactive, got %v", booking.Status())
+	}
+}

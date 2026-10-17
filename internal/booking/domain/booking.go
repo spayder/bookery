@@ -75,7 +75,7 @@ func (b *Booking) Confirm() error {
 }
 
 func (b *Booking) Cancel(now time.Time) error {
-	if b.status != StatusPending && b.status != StatusConfirmed {
+	if !b.IsActive() {
 		return ErrCannotCancel
 	}
 
@@ -85,4 +85,8 @@ func (b *Booking) Cancel(now time.Time) error {
 
 	b.status = StatusCancelled
 	return nil
+}
+
+func (b *Booking) IsActive() bool {
+	return b.status == StatusPending || b.status == StatusConfirmed
 }
