@@ -59,8 +59,8 @@ gofmt -l . && go vet ./...    # formatting and static checks
 - [x] Value objects: `TimeSlot` and typed IDs (`BookingID`, `ResourceID`, `CustomerID`)
 - [x] `Booking` aggregate with its lifecycle and rules 
 - [x] Cancellation policies as interchangeable strategies 
-- [ ] Repository interface with an in-memory implementation *(in progress)*
-- [ ] Use cases: create and cancel a booking
+- [x] Repository interface with an in-memory implementation 
+- [ ] Use cases: create and cancel a booking *(in progress)*
 - [ ] Prevent double booking under concurrent requests
 - [ ] Runnable demo
 - [ ] Asynchronous notifications and expiry of unconfirmed bookings
