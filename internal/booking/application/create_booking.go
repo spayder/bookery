@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/spayder/bookery/internal/booking/domain"
 )
@@ -43,7 +44,7 @@ func (c *CreateBooking) Execute(ctx context.Context, cmd CreateBookingCommand) (
 
 	overlaps, err := c.repository.FindOverlapping(ctx, cmd.ResourceID, cmd.Slot)
 	if err != nil {
-		return domain.BookingID{}, err
+		return domain.BookingID{}, fmt.Errorf("create booking: find overlapping: %w", err)
 	}
 
 	if len(overlaps) > 0 {
@@ -52,15 +53,15 @@ func (c *CreateBooking) Execute(ctx context.Context, cmd CreateBookingCommand) (
 
 	policy, err := c.policyProvider.PolicyFor(ctx, cmd.ResourceID)
 	if err != nil {
-		return domain.BookingID{}, err
+		return domain.BookingID{}, fmt.Errorf("create booking: policy for: %w", err)
 	}
 
 	booking, err := domain.NewBooking(cmd.ResourceID, cmd.CustomerID, cmd.Slot, policy, now)
 	if err != nil {
-		return domain.BookingID{}, err
+		return domain.BookingID{}, fmt.Errorf("create booking: new booking: %w", err)
 	}
 	if err := c.repository.Save(ctx, booking); err != nil {
-		return domain.BookingID{}, err
+		return domain.BookingID{}, fmt.Errorf("create booking: save: %w", err)
 	}
 	return booking.ID(), nil
 }

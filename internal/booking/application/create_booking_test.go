@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,21 @@ type fixedPolicyProvider struct {
 
 func (p fixedPolicyProvider) PolicyFor(_ context.Context, _ domain.ResourceID) (domain.CancellationPolicy, error) {
 	return p.policy, nil
+}
+
+// errSaveFailed stands in for a storage failure, such as a lost database connection.
+var errSaveFailed = errors.New("save failed")
+
+// failingSaveRepository is a test repository whose Save always fails. It finds
+// no overlapping bookings, so CreateBooking always gets as far as Save.
+type failingSaveRepository struct{}
+
+func (failingSaveRepository) FindOverlapping(_ context.Context, _ domain.ResourceID, _ domain.TimeSlot) ([]*domain.Booking, error) {
+	return nil, nil
+}
+
+func (failingSaveRepository) Save(_ context.Context, _ *domain.Booking) error {
+	return errSaveFailed
 }
 
 // Compile-time checks: the build fails if the fakes stop satisfying the ports.
@@ -167,5 +183,57 @@ func TestCreateBooking_CancelledBookingDoesNotBlockNewBooking(t *testing.T) {
 	_, err = createBooking.Execute(ctx, cmd)
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
+	}
+}
+
+func TestCreateBooking_WrapsSaveError(t *testing.T) {
+	ctx := context.Background()
+	createBooking := application.NewCreateBooking(
+		failingSaveRepository{},
+		fixedPolicyProvider{policy: domain.NonCancellablePolicy{}},
+		fixedClock{now: testNow},
+	)
+	cmd := application.CreateBookingCommand{
+		ResourceID: domain.NewResourceID(),
+		CustomerID: domain.NewCustomerID(),
+		Slot:       mustSlot(t, 10, 12),
+	}
+
+	id, err := createBooking.Execute(ctx, cmd)
+
+	if !errors.Is(err, errSaveFailed) {
+		t.Fatalf("err = %v, want it to wrap %v", err, errSaveFailed)
+	}
+	if !strings.HasPrefix(err.Error(), "create booking: ") {
+		t.Errorf("err = %q, want it to start with %q", err.Error(), "create booking: ")
+	}
+	if id != (domain.BookingID{}) {
+		t.Errorf("id = %v, want the zero BookingID on error", id)
+	}
+}
+
+func TestCreateBooking_WrapsNewBookingError(t *testing.T) {
+	ctx := context.Background()
+	createBooking := application.NewCreateBooking(
+		memory.NewBookingRepository(),
+		fixedPolicyProvider{policy: domain.NonCancellablePolicy{}},
+		fixedClock{now: time.Date(2026, 1, 1, 11, 0, 0, 0, time.UTC)},
+	)
+	cmd := application.CreateBookingCommand{
+		ResourceID: domain.NewResourceID(),
+		CustomerID: domain.NewCustomerID(),
+		Slot:       mustSlot(t, 9, 10),
+	}
+
+	id, err := createBooking.Execute(ctx, cmd)
+
+	if !errors.Is(err, domain.ErrSlotInPast) {
+		t.Fatalf("err = %v, want it to wrap %v", err, domain.ErrSlotInPast)
+	}
+	if !strings.HasPrefix(err.Error(), "create booking: ") {
+		t.Errorf("err = %q, want it to start with %q", err.Error(), "create booking: ")
+	}
+	if id != (domain.BookingID{}) {
+		t.Errorf("id = %v, want the zero BookingID on error", id)
 	}
 }
